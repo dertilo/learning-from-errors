@@ -19,7 +19,7 @@ This script serves three goals:
     (3) Serves as CI test for pre-trained checkpoint
 """
 # based on  https://github.com/NVIDIA/NeMo/blob/main/examples/asr/speech_to_text_infer.py
-
+import sys
 from argparse import ArgumentParser
 
 import torch
@@ -66,6 +66,54 @@ def beamsearch_forward(beam_search_lm, log_probs, log_probs_length):
     return [r[0][1] for r in res]
 
 
+def generate_ref_hyps(asr_model, search, arpa):
+
+    if can_gpu:
+        asr_model = asr_model.cuda()
+    asr_model.eval()
+    labels_map = dict(
+        [
+            (i, asr_model.decoder.vocabulary[i])
+            for i in range(len(asr_model.decoder.vocabulary))
+        ]
+    )
+    wer = WER(vocabulary=asr_model.decoder.vocabulary)
+
+    if search == "kenlm" or search == "beamsearch":
+        arpa_file = prepare_arpa_file(arpa)
+        lm_path = arpa_file if search == "kenlm" else None
+
+        beamsearcher = nemo_asr.modules.BeamSearchDecoderWithLM(
+            vocab=list(asr_model.cfg.decoder.params.vocabulary),
+            beam_width=16,
+            alpha=2,
+            beta=1.5,
+            lm_path=lm_path,
+            num_cpus=max(os.cpu_count(), 1),
+            input_tensor=True,
+        )
+
+    for test_batch in tqdm(asr_model.test_dataloader()):
+        if can_gpu:
+            test_batch = [x.cuda() for x in test_batch]
+        with autocast():
+            log_probs, encoded_len, greedy_predictions = asr_model(
+                input_signal=test_batch[0], input_signal_length=test_batch[1]
+            )
+        if search == "greedy":
+            decoded = wer.ctc_decoder_predictions_tensor(greedy_predictions)
+        else:
+            decoded = beamsearch_forward(
+                beamsearcher, log_probs=log_probs, log_probs_length=encoded_len
+            )
+
+        for batch_ind, hyp in enumerate(decoded):
+            reference = "".join(
+                [labels_map[c] for c in test_batch[2][batch_ind].cpu().detach().numpy()]
+            )
+            yield reference, hyp
+
+
 def main():
     # fmt: off
     parser = ArgumentParser()
@@ -84,6 +132,8 @@ def main():
     parser.add_argument(
         "--arpa", default='3-gram.pruned.1e-7.arpa', type=str, help="arpa file"
     )
+    parser.add_argument("--refs", default='refs.txt', type=str)
+    parser.add_argument("--hyps", default='hyps.txt', type=str)
     # fmt: on
 
     args = parser.parse_args()
@@ -106,56 +156,14 @@ def main():
         }
     )
 
-    if args.search == "kenlm" or args.search == "beamsearch":
-        arpa_file = prepare_arpa_file(args.arpa)
-        lm_path = arpa_file if args.search == "kenlm" else None
+    refs_hyps = list(generate_ref_hyps(asr_model, args.search, args.arpa))
+    hypotheses, references = [list(k) for k in zip(*refs_hyps)]
+    
+    data_io.write_jsonl(args.refs, references)
+    data_io.write_jsonl(args.hyps, hypotheses)
 
-        beamsearcher = nemo_asr.modules.BeamSearchDecoderWithLM(
-            vocab=list(asr_model.cfg.decoder.params.vocabulary),
-            beam_width=16,
-            alpha=2,
-            beta=1.5,
-            lm_path=lm_path,
-            num_cpus=max(os.cpu_count(), 1),
-            input_tensor=True,
-        )
-
-    if can_gpu:
-        asr_model = asr_model.cuda()
-    asr_model.eval()
-    labels_map = dict(
-        [
-            (i, asr_model.decoder.vocabulary[i])
-            for i in range(len(asr_model.decoder.vocabulary))
-        ]
-    )
-    wer = WER(vocabulary=asr_model.decoder.vocabulary)
-    hypotheses = []
-    references = []
-    for test_batch in tqdm(asr_model.test_dataloader()):
-        if can_gpu:
-            test_batch = [x.cuda() for x in test_batch]
-        with autocast():
-            log_probs, encoded_len, greedy_predictions = asr_model(
-                input_signal=test_batch[0], input_signal_length=test_batch[1]
-            )
-        if args.search == "greedy":
-            decoded = wer.ctc_decoder_predictions_tensor(greedy_predictions)
-        else:
-            decoded = beamsearch_forward(
-                beamsearcher, log_probs=log_probs, log_probs_length=encoded_len
-            )
-
-        hypotheses += decoded
-
-        for batch_ind in range(greedy_predictions.shape[0]):
-            reference = "".join(
-                [labels_map[c] for c in test_batch[2][batch_ind].cpu().detach().numpy()]
-            )
-            references.append(reference)
-        del test_batch
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
-
+    sys.stdout.flush()
     print(f"Got WER of {wer_value}")
 
 
