@@ -27,8 +27,12 @@ import torch
 from nemo.collections.asr.metrics.wer import WER, word_error_rate
 from nemo.collections.asr.models import EncDecCTCModel
 from nemo.utils import logging
+from torch.nn import Softmax
 from tqdm import tqdm
 from util import data_io
+import nemo.collections.asr as nemo_asr
+import numpy as np
+import os
 
 try:
     from torch.cuda.amp import autocast
@@ -42,6 +46,22 @@ except ImportError:
 
 can_gpu = torch.cuda.is_available()
 
+def beamsearch_forward(beam_search_lm,log_probs, log_probs_length):
+    bs = beam_search_lm
+    probs = torch.exp(log_probs)
+    probs_list = []
+    for i, prob in enumerate(probs):
+        probs_list.append(prob[: log_probs_length[i], :])
+    res = bs.beam_search_func(
+        probs_list,
+        bs.vocab,
+        beam_size=bs.beam_width,
+        num_processes=bs.num_cpus,
+        ext_scoring_func=bs.scorer,
+        cutoff_prob=bs.cutoff_prob,
+        cutoff_top_n=bs.cutoff_top_n,
+    )
+    return [r[0][1] for r in res]
 
 def main():
     parser = ArgumentParser()
@@ -54,6 +74,10 @@ def main():
     parser.add_argument(
         "--normalize_text", default=True, type=bool, help="Normalize transcripts or not. Set to False for non-English."
     )
+    parser.add_argument(
+        "--search", default="greedy", type=str, choices=['greedy', 'beamsearch', 'kenlm'], help="greedy or beamsearch or beamsearch+KenLM"
+    )
+
     args = parser.parse_args()
     torch.set_grad_enabled(False)
 
@@ -79,6 +103,19 @@ def main():
             'normalize_transcripts': args.normalize_text,
         }
     )
+
+    if args.search == "kenlm" or args.search == "beamsearch":
+        lm_path = 'lowercase_3-gram.pruned.1e-7.arpa' if args.search == "kenlm" else None
+
+        beamsearcher = nemo_asr.modules.BeamSearchDecoderWithLM(
+            vocab=list(asr_model.cfg.decoder.params.vocabulary),
+            beam_width=16,
+            alpha=2, beta=1.5,
+            lm_path=lm_path,
+            num_cpus=max(os.cpu_count(), 1),
+            input_tensor=True)
+
+
     if can_gpu:
         asr_model = asr_model.cuda()
     asr_model.eval()
@@ -93,7 +130,14 @@ def main():
             log_probs, encoded_len, greedy_predictions = asr_model(
                 input_signal=test_batch[0], input_signal_length=test_batch[1]
             )
-        hypotheses += wer.ctc_decoder_predictions_tensor(greedy_predictions)
+        if args.search == "greedy":
+            decoded = wer.ctc_decoder_predictions_tensor(greedy_predictions)
+        else:
+            decoded = beamsearch_forward(beamsearcher,log_probs=log_probs,
+                                         log_probs_length=encoded_len)
+
+        hypotheses += decoded
+
         for batch_ind in range(greedy_predictions.shape[0]):
             reference = ''.join([labels_map[c] for c in test_batch[2][batch_ind].cpu().detach().numpy()])
             references.append(reference)
