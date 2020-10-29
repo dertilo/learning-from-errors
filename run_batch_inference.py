@@ -125,6 +125,8 @@ def main():
     parser.add_argument("--arpa", default='3-gram.pruned.1e-7.arpa', type=str, help="arpa file")
     parser.add_argument("--refs", default='refs.txt', type=str)
     parser.add_argument("--hyps", default='hyps.txt', type=str)
+    parser.add_argument("--stats", default='stats.json', type=str)
+
     # fmt: on
 
     args = parser.parse_args()
@@ -156,6 +158,11 @@ def main():
 
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
     sys.stdout.flush()
+    stats = {
+        "wer":wer_value,
+        "args":args.__dict__,
+    }
+    data_io.write_json(args.stats,stats)
     print(f"Got WER of {wer_value}")
 
 
