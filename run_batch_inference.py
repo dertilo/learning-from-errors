@@ -1,26 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""
-This script serves three goals:
-    (1) Demonstrate how to use NeMo Models outside of PytorchLightning
-    (2) Shows example of batch ASR inference
-    (3) Serves as CI test for pre-trained checkpoint
-"""
 # based on  https://github.com/NVIDIA/NeMo/blob/main/examples/asr/speech_to_text_infer.py
 import sys
 from argparse import ArgumentParser
+from pathlib import Path
 
 import torch
 
@@ -70,6 +51,8 @@ def generate_ref_hyps(asr_model, search, arpa):
 
     if can_gpu:
         asr_model = asr_model.cuda()
+        print("USING GPU!")
+
     asr_model.eval()
     labels_map = dict(
         [
@@ -114,24 +97,32 @@ def generate_ref_hyps(asr_model, search, arpa):
             yield reference, hyp
 
 
+def prepare_manifest(corpora_dir="/content/corpora"):
+
+    manifest = "manifest.jsonl"
+
+    g = (
+        {
+            "audio_filepath": f"{str(f).replace(f.name, '')}{d['audio_file']}",
+            "duration": d["duration"],
+            "text": d["text"],
+        }
+        for f in list(Path(corpora_dir).rglob("manifest.jsonl.gz"))
+        for d in data_io.read_jsonl(str(f))
+    )
+    data_io.write_jsonl(manifest, g)
+    return manifest
+
+
 def main():
     # fmt: off
     parser = ArgumentParser()
-    parser.add_argument(
-        "--asr_model", type=str, default="QuartzNet5x5LS-En", help="Pass: 'QuartzNet15x5Base-En'",
-    )
-    parser.add_argument("--manifest", type=str, required=True, default="manifest.jsonl",help="manifest file")
+    parser.add_argument("--asr_model", type=str, default="QuartzNet5x5LS-En", help="Pass: 'QuartzNet15x5Base-En'")
+    parser.add_argument("--corpora_dir", type=str, default="/tmp/corpora",help="directory containing corpora")
     parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--wer_tolerance", type=float, default=1.0, help="used by test")
-    parser.add_argument(
-        "--normalize_text", default=True, type=bool, help="Normalize transcripts or not. Set to False for non-English."
-    )
-    parser.add_argument(
-        "--search", default="greedy", type=str, choices=['greedy', 'beamsearch', 'kenlm'], help="greedy or beamsearch or beamsearch+KenLM"
-    )
-    parser.add_argument(
-        "--arpa", default='3-gram.pruned.1e-7.arpa', type=str, help="arpa file"
-    )
+    parser.add_argument("--normalize_text", default=True, type=bool, help="Normalize transcripts or not. Set to False for non-English.")
+    parser.add_argument("--search", default="greedy", type=str, choices=['greedy', 'beamsearch', 'kenlm'], help="greedy or beamsearch or beamsearch+KenLM")
+    parser.add_argument("--arpa", default='3-gram.pruned.1e-7.arpa', type=str, help="arpa file")
     parser.add_argument("--refs", default='refs.txt', type=str)
     parser.add_argument("--hyps", default='hyps.txt', type=str)
     # fmt: on
@@ -146,10 +137,11 @@ def main():
         print(f"Using NGC cloud ASR model {args.asr_model}")
         asr_model = EncDecCTCModel.from_pretrained(model_name=args.asr_model)
 
+    manifest = prepare_manifest(args.corpora_dir)
     asr_model.setup_test_data(
         test_data_config={
             "sample_rate": 16000,
-            "manifest_filepath": args.manifest,
+            "manifest_filepath": manifest,
             "labels": asr_model.decoder.vocabulary,
             "batch_size": args.batch_size,
             "normalize_transcripts": args.normalize_text,
@@ -158,7 +150,7 @@ def main():
 
     refs_hyps = list(generate_ref_hyps(asr_model, args.search, args.arpa))
     hypotheses, references = [list(k) for k in zip(*refs_hyps)]
-    
+
     data_io.write_jsonl(args.refs, references)
     data_io.write_jsonl(args.hyps, hypotheses)
 
