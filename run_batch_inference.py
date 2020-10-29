@@ -18,7 +18,7 @@ This script serves three goals:
     (2) Shows example of batch ASR inference
     (3) Serves as CI test for pre-trained checkpoint
 """
-# STOLEN FROM NeMo !!!
+# based on  https://github.com/NVIDIA/NeMo/blob/main/examples/asr/speech_to_text_infer.py
 
 from argparse import ArgumentParser
 
@@ -26,13 +26,14 @@ import torch
 
 from nemo.collections.asr.metrics.wer import WER, word_error_rate
 from nemo.collections.asr.models import EncDecCTCModel
-from nemo.utils import logging
 from torch.nn import Softmax
 from tqdm import tqdm
 from util import data_io
 import nemo.collections.asr as nemo_asr
 import numpy as np
 import os
+
+from prepare_arpa import prepare_arpa_file
 
 try:
     from torch.cuda.amp import autocast
@@ -46,7 +47,8 @@ except ImportError:
 
 can_gpu = torch.cuda.is_available()
 
-def beamsearch_forward(beam_search_lm,log_probs, log_probs_length):
+
+def beamsearch_forward(beam_search_lm, log_probs, log_probs_length):
     bs = beam_search_lm
     probs = torch.exp(log_probs)
     probs_list = []
@@ -63,7 +65,9 @@ def beamsearch_forward(beam_search_lm,log_probs, log_probs_length):
     )
     return [r[0][1] for r in res]
 
+
 def main():
+    # fmt: off
     parser = ArgumentParser()
     parser.add_argument(
         "--asr_model", type=str, default="QuartzNet5x5LS-En", help="Pass: 'QuartzNet15x5Base-En'",
@@ -77,43 +81,54 @@ def main():
     parser.add_argument(
         "--search", default="greedy", type=str, choices=['greedy', 'beamsearch', 'kenlm'], help="greedy or beamsearch or beamsearch+KenLM"
     )
+    parser.add_argument(
+        "--arpa", default='3-gram.pruned.1e-7.arpa', type=str, help="arpa file"
+    )
+    # fmt: on
 
     args = parser.parse_args()
     torch.set_grad_enabled(False)
 
-    if args.asr_model.endswith('.nemo'):
-        logging.info(f"Using local ASR model from {args.asr_model}")
+    if args.asr_model.endswith(".nemo"):
+        print(f"Using local ASR model from {args.asr_model}")
         asr_model = EncDecCTCModel.restore_from(restore_path=args.asr_model)
     else:
-        logging.info(f"Using NGC cloud ASR model {args.asr_model}")
+        print(f"Using NGC cloud ASR model {args.asr_model}")
         asr_model = EncDecCTCModel.from_pretrained(model_name=args.asr_model)
 
     asr_model.setup_test_data(
         test_data_config={
-            'sample_rate': 16000,
-            'manifest_filepath': args.manifest,
-            'labels': asr_model.decoder.vocabulary,
-            'batch_size': args.batch_size,
-            'normalize_transcripts': args.normalize_text,
+            "sample_rate": 16000,
+            "manifest_filepath": args.manifest,
+            "labels": asr_model.decoder.vocabulary,
+            "batch_size": args.batch_size,
+            "normalize_transcripts": args.normalize_text,
         }
     )
 
     if args.search == "kenlm" or args.search == "beamsearch":
-        lm_path = 'lowercase_3-gram.pruned.1e-7.arpa' if args.search == "kenlm" else None
+        arpa_file = prepare_arpa_file(args.arpa)
+        lm_path = arpa_file if args.search == "kenlm" else None
 
         beamsearcher = nemo_asr.modules.BeamSearchDecoderWithLM(
             vocab=list(asr_model.cfg.decoder.params.vocabulary),
             beam_width=16,
-            alpha=2, beta=1.5,
+            alpha=2,
+            beta=1.5,
             lm_path=lm_path,
             num_cpus=max(os.cpu_count(), 1),
-            input_tensor=True)
-
+            input_tensor=True,
+        )
 
     if can_gpu:
         asr_model = asr_model.cuda()
     asr_model.eval()
-    labels_map = dict([(i, asr_model.decoder.vocabulary[i]) for i in range(len(asr_model.decoder.vocabulary))])
+    labels_map = dict(
+        [
+            (i, asr_model.decoder.vocabulary[i])
+            for i in range(len(asr_model.decoder.vocabulary))
+        ]
+    )
     wer = WER(vocabulary=asr_model.decoder.vocabulary)
     hypotheses = []
     references = []
@@ -127,19 +142,22 @@ def main():
         if args.search == "greedy":
             decoded = wer.ctc_decoder_predictions_tensor(greedy_predictions)
         else:
-            decoded = beamsearch_forward(beamsearcher,log_probs=log_probs,
-                                         log_probs_length=encoded_len)
+            decoded = beamsearch_forward(
+                beamsearcher, log_probs=log_probs, log_probs_length=encoded_len
+            )
 
         hypotheses += decoded
 
         for batch_ind in range(greedy_predictions.shape[0]):
-            reference = ''.join([labels_map[c] for c in test_batch[2][batch_ind].cpu().detach().numpy()])
+            reference = "".join(
+                [labels_map[c] for c in test_batch[2][batch_ind].cpu().detach().numpy()]
+            )
             references.append(reference)
         del test_batch
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
 
-    logging.info(f'Got WER of {wer_value}')
+    print(f"Got WER of {wer_value}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()  # noqa pylint: disable=no-value-for-parameter
