@@ -27,6 +27,8 @@ import torch
 from nemo.collections.asr.metrics.wer import WER, word_error_rate
 from nemo.collections.asr.models import EncDecCTCModel
 from nemo.utils import logging
+from tqdm import tqdm
+from util import data_io
 
 try:
     from torch.cuda.amp import autocast
@@ -44,9 +46,9 @@ can_gpu = torch.cuda.is_available()
 def main():
     parser = ArgumentParser()
     parser.add_argument(
-        "--asr_model", type=str, default="QuartzNet15x5Base-En", required=True, help="Pass: 'QuartzNet15x5Base-En'",
+        "--asr_model", type=str, default="QuartzNet5x5LS-En", help="Pass: 'QuartzNet15x5Base-En'",
     )
-    parser.add_argument("--dataset", type=str, required=True, help="path to evaluation data")
+    parser.add_argument("--dataset", type=str, default="/tmp/asr_data/ENGLISH/dev-other_processed_mp3/manifest.jsonl.gz",help="path to evaluation data")
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--wer_tolerance", type=float, default=1.0, help="used by test")
     parser.add_argument(
@@ -61,10 +63,17 @@ def main():
     else:
         logging.info(f"Using NGC cloud ASR model {args.asr_model}")
         asr_model = EncDecCTCModel.from_pretrained(model_name=args.asr_model)
+
+    g = ({"audio_filepath": d["audio_file"].replace("/content/SPANISH/",
+                                                    "/tmp/asr_data/ENGLISH/"),
+          "duration": d["duration"], "text": d["text"]} for f in [args.dataset] for d in
+         data_io.read_jsonl(str(f),limit=50))
+    data_io.write_jsonl("/tmp/manifest.jsonl", g)
+
     asr_model.setup_test_data(
         test_data_config={
             'sample_rate': 16000,
-            'manifest_filepath': args.dataset,
+            'manifest_filepath': "/tmp/manifest.jsonl",
             'labels': asr_model.decoder.vocabulary,
             'batch_size': args.batch_size,
             'normalize_transcripts': args.normalize_text,
@@ -77,7 +86,7 @@ def main():
     wer = WER(vocabulary=asr_model.decoder.vocabulary)
     hypotheses = []
     references = []
-    for test_batch in asr_model.test_dataloader():
+    for test_batch in tqdm(asr_model.test_dataloader()):
         if can_gpu:
             test_batch = [x.cuda() for x in test_batch]
         with autocast():
