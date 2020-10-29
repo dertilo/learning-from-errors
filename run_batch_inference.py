@@ -68,7 +68,7 @@ def main():
     parser.add_argument(
         "--asr_model", type=str, default="QuartzNet5x5LS-En", help="Pass: 'QuartzNet15x5Base-En'",
     )
-    parser.add_argument("--dataset", type=str, default="/tmp/asr_data/ENGLISH/dev-other_processed_mp3/manifest.jsonl.gz",help="path to evaluation data")
+    parser.add_argument("--manifest", type=str, required=True, default="manifest.jsonl",help="manifest file")
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--wer_tolerance", type=float, default=1.0, help="used by test")
     parser.add_argument(
@@ -88,16 +88,10 @@ def main():
         logging.info(f"Using NGC cloud ASR model {args.asr_model}")
         asr_model = EncDecCTCModel.from_pretrained(model_name=args.asr_model)
 
-    g = ({"audio_filepath": d["audio_file"].replace("/content/SPANISH/",
-                                                    "/tmp/asr_data/ENGLISH/"),
-          "duration": d["duration"], "text": d["text"]} for f in [args.dataset] for d in
-         data_io.read_jsonl(str(f),limit=50))
-    data_io.write_jsonl("/tmp/manifest.jsonl", g)
-
     asr_model.setup_test_data(
         test_data_config={
             'sample_rate': 16000,
-            'manifest_filepath': "/tmp/manifest.jsonl",
+            'manifest_filepath': args.manifest,
             'labels': asr_model.decoder.vocabulary,
             'batch_size': args.batch_size,
             'normalize_transcripts': args.normalize_text,
@@ -143,9 +137,8 @@ def main():
             references.append(reference)
         del test_batch
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
-    if wer_value > args.wer_tolerance:
-        raise ValueError(f"Got WER of {wer_value}. It was higher than {args.wer_tolerance}")
-    logging.info(f'Got WER of {wer_value}. Tolerance was {args.wer_tolerance}')
+
+    logging.info(f'Got WER of {wer_value}')
 
 
 if __name__ == '__main__':
