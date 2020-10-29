@@ -119,13 +119,11 @@ def main():
     parser = ArgumentParser()
     parser.add_argument("--asr_model", type=str, default="QuartzNet5x5LS-En", help="Pass: 'QuartzNet15x5Base-En'")
     parser.add_argument("--corpora_dir", type=str, default="/tmp/corpora",help="directory containing corpora")
-    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--normalize_text", default=True, type=bool, help="Normalize transcripts or not. Set to False for non-English.")
-    parser.add_argument("--search", default="greedy", type=str, choices=['greedy', 'beamsearch', 'kenlm'], help="greedy or beamsearch or beamsearch+KenLM")
+    parser.add_argument("--search", default="kenlm", type=str, choices=['greedy', 'beamsearch', 'kenlm'], help="greedy or beamsearch or beamsearch+KenLM")
     parser.add_argument("--arpa", default='3-gram.pruned.1e-7.arpa', type=str, help="arpa file")
-    parser.add_argument("--refs", default='refs.txt', type=str)
-    parser.add_argument("--hyps", default='hyps.txt', type=str)
-    parser.add_argument("--stats", default='stats.json', type=str)
+    parser.add_argument("--name", default='test', type=str)
 
     # fmt: on
 
@@ -153,8 +151,8 @@ def main():
     refs_hyps = list(generate_ref_hyps(asr_model, args.search, args.arpa))
     hypotheses, references = [list(k) for k in zip(*refs_hyps)]
 
-    data_io.write_jsonl(args.refs, references)
-    data_io.write_jsonl(args.hyps, hypotheses)
+    data_io.write_jsonl(f"{args.name}_refs.txt", references)
+    data_io.write_jsonl(f"{args.name}_hyps.txt", hypotheses)
 
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
     sys.stdout.flush()
@@ -162,7 +160,7 @@ def main():
         "wer":wer_value,
         "args":args.__dict__,
     }
-    data_io.write_json(args.stats,stats)
+    data_io.write_json(f"{args.name}_stats",stats)
     print(f"Got WER of {wer_value}")
 
 
