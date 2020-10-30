@@ -26,19 +26,25 @@ def calc_corrected_ngrams(ref_tok, hyp_tok, order=3):
         align_full_hyp=True,
     )
 
-    is_edited = [get_edit_type(r, h, eps) != "cor" for r, h, *_ in output]
+    out_is_edited = [get_edit_type(r, h, eps) != "cor" for r, h, *_ in output]
+    out_or_previous = [x or out_is_edited[max(k-1,0)] for k,x in enumerate(out_is_edited)]
+    ref_is_edited = [(r,is_e) for (r,*_),is_e in zip(output,out_or_previous) if r!=eps]
+    #assert len(ref_is_edited)==len(ref_tok) # does not hold! cause smith_waternman does strange things!
+    ref,is_edited = [list(x) for x in zip(*ref_is_edited)]
 
     return [
-        [x for x, *_ in output[(k - order) : k]]
-        for k in range(order, len(output) + 1)
+        ref_tok[(k - order): k]
+        for k in range(order, len(ref) + 1)
         if any(is_edited[(k - order) : k])
     ]
 
 
 if __name__ == "__main__":
     eps = "|"
-    refs = list(data_io.read_lines("3-gram.pruned.1e-7.arpa_wav_refs.txt"))
-    hyps = list(data_io.read_lines("3-gram.pruned.1e-7.arpa_wav_hyps.txt"))
+    name = "/tmp/lm_0_7_arpa"
+    format = "mp3"
+    refs = list(data_io.read_lines("%s_%s/refs.txt" % (name, format)))
+    hyps = list(data_io.read_lines("%s_%s/hyps.txt" % (name, format)))
 
     order = 3
     g = (
