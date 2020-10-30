@@ -56,20 +56,16 @@ def generate_ref_hyps(asr_model, search, arpa):
         print("USING GPU!")
 
     asr_model.eval()
-    labels_map = dict(
-        [
-            (i, asr_model.decoder.vocabulary[i])
-            for i in range(len(asr_model.decoder.vocabulary))
-        ]
-    )
-    wer = WER(vocabulary=asr_model.decoder.vocabulary)
+    vocabulary = asr_model.decoder.vocabulary
+    labels_map = dict([(i, vocabulary[i]) for i in range(len(vocabulary))])
+    wer = WER(vocabulary=vocabulary)
 
     if search == "kenlm" or search == "beamsearch":
         arpa_file = prepare_arpa_file(arpa)
         lm_path = arpa_file if search == "kenlm" else None
 
         beamsearcher = nemo_asr.modules.BeamSearchDecoderWithLM(
-            vocab=list(asr_model.cfg.decoder.params.vocabulary),
+            vocab=list(vocabulary),
             beam_width=16,
             alpha=2,
             beta=1.5,
@@ -78,12 +74,17 @@ def generate_ref_hyps(asr_model, search, arpa):
             input_tensor=True,
         )
 
-    for test_batch in asr_model.test_dataloader():
+    for (
+        batch
+    ) in (
+        asr_model.test_dataloader()
+    ):  # TODO(tilo): test_loader should return dict or some typed object not tuple of tensors!!
         if can_gpu:
-            test_batch = [x.cuda() for x in test_batch]
+            batch = [x.cuda() for x in batch]
+        input_signal, inpsig_len, transcript, transc_len = batch
         with autocast():
             log_probs, encoded_len, greedy_predictions = asr_model(
-                input_signal=test_batch[0], input_signal_length=test_batch[1]
+                input_signal=input_signal, input_signal_length=inpsig_len
             )
         if search == "greedy":
             decoded = wer.ctc_decoder_predictions_tensor(greedy_predictions)
@@ -92,18 +93,21 @@ def generate_ref_hyps(asr_model, search, arpa):
                 beamsearcher, log_probs=log_probs, log_probs_length=encoded_len
             )
 
-        for batch_ind, hyp in enumerate(decoded):
+        for i, hyp in enumerate(decoded):
             reference = "".join(
-                [labels_map[c] for c in test_batch[2][batch_ind].cpu().detach().numpy()]
+                [
+                    labels_map[c]
+                    for c in transcript[i].cpu().detach().numpy()[: transc_len[i]]
+                ]
             )
             yield reference, hyp
 
 
-def prepare_manifest(corpora_dir="/content/corpora",limit=None):
+def prepare_manifest(corpora_dir="/content/corpora", limit=None):
 
     manifest = "manifest.jsonl"
     manifests = list(Path(corpora_dir).rglob("manifest.jsonl.gz"))
-    limit = round(limit/len(manifests)) if limit is not None else None
+    limit = round(limit / len(manifests)) if limit is not None else None
 
     g = (
         {
@@ -112,13 +116,13 @@ def prepare_manifest(corpora_dir="/content/corpora",limit=None):
             "text": d["text"],
         }
         for f in manifests
-        for d in data_io.read_jsonl(str(f),limit=limit)
+        for d in data_io.read_jsonl(str(f), limit=limit)
     )
     data_io.write_jsonl(manifest, g)
     return manifest
 
 
-def batch_inference(args:argparse.Namespace):
+def batch_inference(args: argparse.Namespace):
 
     torch.set_grad_enabled(False)
 
@@ -129,7 +133,7 @@ def batch_inference(args:argparse.Namespace):
         print(f"Using NGC cloud ASR model {args.asr_model}")
         asr_model = EncDecCTCModel.from_pretrained(model_name=args.asr_model)
 
-    manifest = prepare_manifest(args.corpora_dir,args.limit)
+    manifest = prepare_manifest(args.corpora_dir, args.limit)
     asr_model.setup_test_data(
         test_data_config={
             "sample_rate": 16000,
@@ -140,8 +144,8 @@ def batch_inference(args:argparse.Namespace):
         }
     )
 
-    refs_hyps = tqdm(generate_ref_hyps(asr_model, args.search, args.arpa))
-    hypotheses, references = [list(k) for k in zip(*refs_hyps)]
+    refs_hyps = list(tqdm(generate_ref_hyps(asr_model, args.search, args.arpa)))
+    references, hypotheses = [list(k) for k in zip(*refs_hyps)]
 
     data_io.write_jsonl(f"{args.name}_refs.txt", references)
     data_io.write_jsonl(f"{args.name}_hyps.txt", hypotheses)
@@ -149,10 +153,10 @@ def batch_inference(args:argparse.Namespace):
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
     sys.stdout.flush()
     stats = {
-        "wer":wer_value,
-        "args":args.__dict__,
+        "wer": wer_value,
+        "args": args.__dict__,
     }
-    data_io.write_json(f"{args.name}_stats.txt",stats)
+    data_io.write_json(f"{args.name}_stats.txt", stats)
     print(f"Got WER of {wer_value}")
     return stats
 
