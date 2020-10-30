@@ -3,10 +3,10 @@ import os, shutil, wget
 # STOLEN from NeMo
 
 
-
 def prepare_arpa_file(arpa):
     lm_gzip_path = f'{arpa}.gz'
-    if not os.path.exists(lm_gzip_path):
+    if not os.path.exists(lm_gzip_path) and not os.path.isfile(arpa):
+        assert arpa in ["3-gram.arpa","4-gram.arpa","3-gram.pruned.1e-7.arpa","3-gram.pruned.3e-7.arpa"]
         print('Downloading pruned 3-gram model.')
         lm_url = f'http://www.openslr.org/resources/11/{lm_gzip_path}'
         lm_gzip_path = wget.download(lm_url)
