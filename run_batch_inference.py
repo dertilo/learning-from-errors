@@ -74,11 +74,8 @@ def generate_ref_hyps(asr_model, search, arpa):
             input_tensor=True,
         )
 
-    for (
-        batch
-    ) in (
-        asr_model.test_dataloader()
-    ):  # TODO(tilo): test_loader should return dict or some typed object not tuple of tensors!!
+    for batch in asr_model.test_dataloader():
+        # TODO(tilo): test_loader should return dict or some typed object not tuple of tensors!!
         if can_gpu:
             batch = [x.cuda() for x in batch]
         input_signal, inpsig_len, transcript, transc_len = batch
@@ -147,9 +144,9 @@ def batch_inference(args: argparse.Namespace):
     refs_hyps = list(tqdm(generate_ref_hyps(asr_model, args.search, args.arpa)))
     references, hypotheses = [list(k) for k in zip(*refs_hyps)]
 
-    os.makedirs(args.results_dir,exist_ok=True)
-    data_io.write_jsonl(f"{args.results_dir}/refs.txt", references)
-    data_io.write_jsonl(f"{args.results_dir}/hyps.txt", hypotheses)
+    os.makedirs(args.results_dir, exist_ok=True)
+    data_io.write_lines(f"{args.results_dir}/refs.txt", references)
+    data_io.write_lines(f"{args.results_dir}/hyps.txt", hypotheses)
 
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
     sys.stdout.flush()
