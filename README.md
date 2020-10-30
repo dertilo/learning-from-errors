@@ -10,9 +10,13 @@
     1. dev-other wav -> hopefully WER of enhanced KenLM gets not worse!
     2. dev-other low quality -> hypothesis enhanced KenLM get lower WER then standard KenLM
 
+
 #### 2. use SOTA LM and finetune it
+* needs beam-search that can handle "external" LM as scorer
  
 #### 3. "finetune" the acoustic model (quartznet) 
+
+#### 4. finetune seq2seq model on correction pairs
 
 
 ## setup
@@ -41,4 +45,10 @@ cd NeMo && scripts/install_ctc_decoders.sh
 ## get data
 * with my own script !
 
-
+### train KenLM
+```shell script
+wget http://www.openslr.org/resources/11/librispeech-lm-norm.txt.gz
+zcat /home/tilo/data/asr_data/ENGLISH/librispeech-lm-norm.txt.gz | head -n 1000 > text
+bin/lmplz -o 3 -S 30% -T /tmp --prune 0 4 <$HOME/data/asr_data/ENGLISH/librispeech-lm-norm.txt >lm_4.arpa
+gzip -c lm_4.arpa > ~/googledrive/data/asr_data/ENGLISH/lm_4.arpa.gz
+```
