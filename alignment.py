@@ -1,12 +1,17 @@
-
 from __future__ import print_function
+
+from collections import Counter
+
+from pprint import pprint
+
 import argparse
 import logging
 import sys
+
 logger = logging.getLogger(__name__)
 verbose_level = 0
 
-
+# fmt: off
 def smith_waterman_alignment(ref, hyp, similarity_score_function,
                              del_score, ins_score,
                              eps_symbol="<eps>", align_full_hyp=True):
@@ -181,33 +186,63 @@ def smith_waterman_alignment(ref, hyp, similarity_score_function,
 
     return (output, max_score)
 
+# fmt: on
 
 
-def get_edit_type(ref,hyp,eps="-"):
-    if ref!=hyp and not (ref==eps or hyp==eps):
+def get_edit_type(ref, hyp, eps="-"):
+    if ref != hyp and not (ref == eps or hyp == eps):
         et = "sub"
-    elif ref!=hyp and ref==eps:
+    elif ref != hyp and ref == eps:
         et = "ins"
-    elif ref!=hyp and hyp==eps:
+    elif ref != hyp and hyp == eps:
         et = "del"
     else:
         et = "cor"
 
     return et
 
-if __name__ == '__main__':
-    hyp = "Thee cad i blac"
-    ref = "The cat is black"
 
-    verbose = 3
-    eps = '|'
+def align_and_calc_edit_types(ref_tok, hyp_tok):
 
+    eps = "|"
     output, score = smith_waterman_alignment(
-        ref, hyp, similarity_score_function=lambda x, y: 2 if (x == y) else -1,
-        del_score=-1, ins_score=-1, eps_symbol=eps, align_full_hyp=True)
-    print("ref: "+"".join(x[0] for x in output))
-    print("hyp: "+"".join(x[1] for x in output))
+        ref_tok,
+        hyp_tok,
+        similarity_score_function=lambda x, y: 2 if (x == y) else -1,
+        del_score=-1,
+        ins_score=-1,
+        eps_symbol=eps,
+        align_full_hyp=True,
+    )
 
-    print(output)
-    print([f"{r}->{h}: {get_edit_type(r, h, eps)}" for r,h,*_ in output])
+    ets = [get_edit_type(r, h, eps) for r, h, *_ in output]
+    return ets
 
+
+if __name__ == "__main__":
+    from util import data_io
+
+    refs = list(data_io.read_lines("3-gram.pruned.1e-7.arpa_wav_refs.txt"))
+    hyps = list(data_io.read_lines("3-gram.pruned.1e-7.arpa_wav_hyps.txt"))
+    pprint(
+        Counter(
+            e
+            for r, h in zip(refs, hyps)
+            for e in align_and_calc_edit_types(r.split(), h.split())
+        )
+    )
+# if __name__ == '__main__':
+#     hyp = "Thee cad i blac"
+#     ref = "The cat is black"
+#
+#     verbose = 3
+#     eps = '|'
+#
+#     output, score = smith_waterman_alignment(
+#         ref, hyp, similarity_score_function=lambda x, y: 2 if (x == y) else -1,
+#         del_score=-1, ins_score=-1, eps_symbol=eps, align_full_hyp=True)
+#     print("ref: "+"".join(x[0] for x in output))
+#     print("hyp: "+"".join(x[1] for x in output))
+#
+#     print(output)
+#     print([f"{r}->{h}: {get_edit_type(r, h, eps)}" for r,h,*_ in output])
