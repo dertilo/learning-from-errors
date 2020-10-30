@@ -222,8 +222,10 @@ def align_and_calc_edit_types(ref_tok, hyp_tok):
 if __name__ == "__main__":
     from util import data_io
 
-    refs = list(data_io.read_lines("3-gram.pruned.1e-7.arpa_wav_refs.txt"))
-    hyps = list(data_io.read_lines("3-gram.pruned.1e-7.arpa_wav_hyps.txt"))
+    name = "/tmp/lm_0_7_arpa"
+    format = "mp3"
+    refs = list(data_io.read_lines("%s_%s/refs.txt" % (name, format)))
+    hyps = list(data_io.read_lines("%s_%s/hyps.txt" % (name, format)))
     pprint(
         Counter(
             e

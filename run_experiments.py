@@ -5,13 +5,12 @@ import argparse
 from run_batch_inference import batch_inference
 
 if __name__ == "__main__":
-    limit = 200
 
     opelslr_1e7 = "3-gram.pruned.1e-7.arpa"
     stats = []
 
     for arpa, format in [
-        # (opelslr_1e7, "wav"), (opelslr_1e7, "mp3"),
+        (opelslr_1e7, "wav"), (opelslr_1e7, "mp3"),
         ("lm_0_7.arpa","wav"), ("lm_0_7.arpa","mp3")
                          ]:
         params = {
@@ -21,7 +20,7 @@ if __name__ == "__main__":
             "normalize_text": True,
             "search": "kenlm",
             "arpa": arpa,
-            "name": "1e7_mp3",
+            "results_dir": f"/tmp/{arpa.replace('.','_')}_{format}",
             "limit": 200,
         }
 
