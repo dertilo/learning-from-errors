@@ -4,9 +4,20 @@ import os, shutil, wget
 
 
 def prepare_arpa_file(arpa):
+    if arpa in ["3-gram.arpa","4-gram.arpa","3-gram.pruned.1e-7.arpa","3-gram.pruned.3e-7.arpa"]:
+        lm_path = preprocess_openslr_arpa(arpa)
+    else:
+        if arpa.endswith(".gz"):
+            lm_path = arpa.replace('.gz', 'txt')
+            os.system(f"gzip -c {arpa} > {lm_path}")
+        else:
+            lm_path = arpa
+    return lm_path
+
+
+def preprocess_openslr_arpa(arpa):
     lm_gzip_path = f'{arpa}.gz'
     if not os.path.exists(lm_gzip_path) and not os.path.isfile(arpa):
-        assert arpa in ["3-gram.arpa","4-gram.arpa","3-gram.pruned.1e-7.arpa","3-gram.pruned.3e-7.arpa"]
         print('Downloading pruned 3-gram model.')
         lm_url = f'http://www.openslr.org/resources/11/{lm_gzip_path}'
         lm_gzip_path = wget.download(lm_url)
@@ -29,6 +40,7 @@ def prepare_arpa_file(arpa):
                     f_lower.write(line.lower())
     print('Converted language model file to lowercase.')
     return lm_path
+
 
 if __name__ == '__main__':
     arpa = '3-gram.pruned.1e-7.arpa'

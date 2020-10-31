@@ -7,6 +7,7 @@ from pprint import pprint
 import argparse
 import logging
 import sys
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 verbose_level = 0
@@ -222,17 +223,17 @@ def align_and_calc_edit_types(ref_tok, hyp_tok):
 if __name__ == "__main__":
     from util import data_io
 
-    name = "/tmp/lm_0_7_arpa"
+    name = "/tmp/lm_0_7"
     format = "mp3"
-    refs = list(data_io.read_lines("%s_%s/refs.txt" % (name, format)))
-    hyps = list(data_io.read_lines("%s_%s/hyps.txt" % (name, format)))
-    pprint(
-        Counter(
-            e
-            for r, h in zip(refs, hyps)
-            for e in align_and_calc_edit_types(r.split(), h.split())
-        )
+    refs = data_io.read_lines("%s_%s/refs.txt" % (name, format))
+    hyps = data_io.read_lines("%s_%s/hyps.txt" % (name, format))
+    e_g = (
+        e
+        for r, h in tqdm(zip(refs, hyps))
+        for e in align_and_calc_edit_types(r.split(), h.split())
     )
+    pprint(Counter(e_g))
+    # Counter({'cor': 4461679, 'sub': 100513, 'del': 19828, 'ins': 8277})
 # if __name__ == '__main__':
 #     hyp = "Thee cad i blac"
 #     ref = "The cat is black"

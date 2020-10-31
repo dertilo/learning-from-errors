@@ -145,8 +145,8 @@ def batch_inference(args: argparse.Namespace):
     references, hypotheses = [list(k) for k in zip(*refs_hyps)]
 
     os.makedirs(args.results_dir, exist_ok=True)
-    data_io.write_lines(f"{args.results_dir}/refs.txt", references)
-    data_io.write_lines(f"{args.results_dir}/hyps.txt", hypotheses)
+    data_io.write_lines(f"{args.results_dir}/refs.txt.gz", references)
+    data_io.write_lines(f"{args.results_dir}/hyps.txt.gz", hypotheses)
 
     wer_value = word_error_rate(hypotheses=hypotheses, references=references)
     sys.stdout.flush()

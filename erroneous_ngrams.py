@@ -1,3 +1,4 @@
+from tqdm import tqdm
 from typing import List, Tuple
 
 from util import data_io
@@ -43,13 +44,13 @@ if __name__ == "__main__":
     eps = "|"
     name = "/tmp/lm_0_7_arpa"
     format = "mp3"
-    refs = list(data_io.read_lines("%s_%s/refs.txt" % (name, format)))
-    hyps = list(data_io.read_lines("%s_%s/hyps.txt" % (name, format)))
+    refs = data_io.read_lines("%s_%s/refs.txt" % (name, format))
+    hyps = data_io.read_lines("%s_%s/hyps.txt" % (name, format))
 
     order = 3
     g = (
         " ".join(ngram)
-        for ref, hyp in zip(refs, hyps)
+        for ref, hyp in tqdm(zip(refs, hyps))
         for ngram in calc_corrected_ngrams(tokenize(ref), tokenize(hyp), order)
     )
 
