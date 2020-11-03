@@ -24,6 +24,8 @@
     * on (speech,text) dataset containing corrections
 
 #### 4. finetune seq2seq model on correction pairs
+1. inference with pretrained BART + calcuate some metrics
+    * metrics [see](/https://github.com/NVIDIA/NeMo/tree/main/nemo/collections/asr/metrics) 
 * finetune BART?
 
 ## setup
@@ -69,6 +71,12 @@ Wall time: 5h 31min 3s
 ```shell script
 python3 kenlm_arpa.py --input_txt $HOME/data/asr_data/ENGLISH/librispeech-lm-norm.txt.gz --output_dir ./kenlm_3_089   --top_k 200000 --kenlm_bins $HOME/code/CPP/kenlm/build/bin/   --arpa_order 3 --max_arpa_memory "20%" --arpa_prune "0|8|9"
 gzip -c kenlm_3_089/lm_filtered.arpa > ~/googledrive/data/asr_data/ENGLISH/kenlm_3_089.arpa.gz
+```
+* inference
+```shell script
+132553it [1:01:35, 35.87it/s]
+CPU times: user 482 ms, sys: 81.4 ms, total: 563 ms
+Wall time: 1h 2min 37s
 ```
 2. calculate [erroneous ngrams](erroneous_ngrams.py)
 
