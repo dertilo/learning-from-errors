@@ -7,11 +7,12 @@ def prepare_arpa_file(arpa):
     if arpa in ["3-gram.arpa","4-gram.arpa","3-gram.pruned.1e-7.arpa","3-gram.pruned.3e-7.arpa"]:
         lm_path = preprocess_openslr_arpa(arpa)
     else:
-        if arpa.endswith(".gz"):
-            lm_path = arpa.replace('.gz', 'txt')
-            os.system(f"gzip -c {arpa} > {lm_path}")
+        if arpa.endswith(".gz") and arpa.startswith("/mydrive"): # very hacky! just for colab!
+            lm_path = arpa.replace('.gz', '')
+            lm_path = lm_path.split("/")[-1]
+            assert os.system(f"zcat {arpa} > {lm_path}") == 0
         else:
-            lm_path = arpa
+            assert False
     return lm_path
 
 
