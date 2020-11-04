@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, List
 
 import argparse
 import gzip
@@ -26,7 +26,7 @@ def process_file(counter, file_out, input_file):
     file_in.close()
 
 
-def convert_and_filter_topk(input_txt_files, cache_dir, top_k):
+def convert_and_filter_topk(input_txt_files:List[str], cache_dir, top_k):
     """ Convert to lowercase, count word occurrences and save top-k words to a file """
 
     counter = Counter()
