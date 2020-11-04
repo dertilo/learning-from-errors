@@ -49,7 +49,7 @@ def beamsearch_forward(beam_search_lm, log_probs, log_probs_length):
     return [r[0][1] for r in res]
 
 
-def generate_ref_hyps(asr_model, search, arpa):
+def generate_ref_hyps(asr_model:EncDecCTCModel, search:str, arpa:str):
 
     if can_gpu:
         asr_model = asr_model.cuda()
@@ -106,9 +106,16 @@ def prepare_manifest(corpora_dir="/content/corpora", limit=None):
     manifests = list(Path(corpora_dir).rglob("manifest.jsonl.gz"))
     limit = round(limit / len(manifests)) if limit is not None else None
 
+    def get_file_name(f):
+        if "/" in f:
+            o = f.split('/')[-1]
+        else:
+            o = f
+        return o
+    
     g = (
         {
-            "audio_filepath": f"{str(f).replace(f.name, '')}{d['audio_file']}",
+            "audio_filepath": f"{str(f).replace(f.name, '')}/mp3/{get_file_name(d['audio_file'])}",#TODO(tilo): just hack for TEDLIUM!
             "duration": d["duration"],
             "text": d["text"],
         }
