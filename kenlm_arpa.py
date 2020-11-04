@@ -8,6 +8,19 @@ from collections import Counter
 # STOLEN FROM: https://github.com/mozilla/DeepSpeech/blob/master/data/lm/generate_lm.py
 from tqdm import tqdm
 
+def process_file(counter, file_out, input_file):
+    _, file_extension = os.path.splitext(input_file)
+    if file_extension == ".gz":
+        file_in = io.TextIOWrapper(
+            io.BufferedReader(gzip.open(input_file)), encoding="utf-8"
+        )
+    else:
+        file_in = open(input_file, encoding="utf-8")
+    for line in tqdm(file_in):
+        line_lower = line.lower()
+        counter.update(line_lower.split())
+        file_out.write(line_lower)
+    file_in.close()
 
 def convert_and_filter_topk(args):
     """ Convert to lowercase, count word occurrences and save top-k words to a file """
@@ -26,20 +39,9 @@ def convert_and_filter_topk(args):
         ) as file_out:
 
             # Open the input file either from input.txt or input.txt.gz
-            _, file_extension = os.path.splitext(args.input_txt)
-            if file_extension == ".gz":
-                file_in = io.TextIOWrapper(
-                    io.BufferedReader(gzip.open(args.input_txt)), encoding="utf-8"
-                )
-            else:
-                file_in = open(args.input_txt, encoding="utf-8")
 
-            for line in tqdm(file_in):
-                line_lower = line.lower()
-                counter.update(line_lower.split())
-                file_out.write(line_lower)
-
-            file_in.close()
+            for input_file in args.input_txt:
+                process_file(counter, file_out, input_file)
 
         # Save top-k words
         print("\nSaving top {} words ...".format(args.top_k))
@@ -98,6 +100,7 @@ def main():
         "--input_txt",
         help="Path to a file.txt or file.txt.gz with sample sentences",
         type=str,
+        nargs='+',
         required=True,
     )
     parser.add_argument(
