@@ -12,7 +12,7 @@ def prepare_arpa_file(arpa):
             lm_path = lm_path.split("/")[-1]
             assert os.system(f"zcat {arpa} > {lm_path}") == 0
         else:
-            assert False
+            lm_path = arpa
     return lm_path
 
 
