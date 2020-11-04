@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 import argparse
 import gzip
 import io
@@ -5,8 +7,9 @@ import os
 import subprocess
 from collections import Counter
 
-# STOLEN FROM: https://github.com/mozilla/DeepSpeech/blob/master/data/lm/generate_lm.py
+# based on: https://github.com/mozilla/DeepSpeech/blob/master/data/lm/generate_lm.py
 from tqdm import tqdm
+
 
 def process_file(counter, file_out, input_file):
     _, file_extension = os.path.splitext(input_file)
@@ -22,15 +25,15 @@ def process_file(counter, file_out, input_file):
         file_out.write(line_lower)
     file_in.close()
 
-def convert_and_filter_topk(args):
+
+def convert_and_filter_topk(input_txt_files, cache_dir, top_k):
     """ Convert to lowercase, count word occurrences and save top-k words to a file """
 
     counter = Counter()
-    data_lower = os.path.join(args.cache_dir, "lower.txt.gz")
+    data_lower = os.path.join(cache_dir, "lower.txt.gz")
 
-    vocab_path = "vocab-{}.txt".format(args.top_k)
-    vocab_path = os.path.join(args.cache_dir, vocab_path)
-
+    vocab_path = "vocab-{}.txt".format(top_k)
+    vocab_path = os.path.join(cache_dir, vocab_path)
 
     if not os.path.isfile(data_lower) or not os.path.exists(vocab_path):
         print("\nConverting to lowercase and counting word occurrences ...")
@@ -40,12 +43,12 @@ def convert_and_filter_topk(args):
 
             # Open the input file either from input.txt or input.txt.gz
 
-            for input_file in args.input_txt:
+            for input_file in input_txt_files:
                 process_file(counter, file_out, input_file)
 
         # Save top-k words
-        print("\nSaving top {} words ...".format(args.top_k))
-        top_counter = counter.most_common(args.top_k)
+        print("\nSaving top {} words ...".format(top_k))
+        top_counter = counter.most_common(top_k)
         vocab_str = "\n".join(word for word, count in top_counter)
 
         with open(vocab_path, "w+") as file:
@@ -57,24 +60,32 @@ def convert_and_filter_topk(args):
     return data_lower, vocab_str
 
 
-def build_lm(args, data_lower, vocab_str):
+class ArpaArgs(NamedTuple):
+    kenlm_bin: str
+    output_dir: str = "kenlm"
+    order: int = 3
+    max_memory: str = "20%"
+    prune: str = "0|8|9"
+
+
+def build_lm(args: ArpaArgs, data_lower, vocab_str):
     print("\nCreating ARPA file ...")
     lm_path = os.path.join(args.output_dir, "lm.arpa")
     subargs = [
-            os.path.join(args.kenlm_bins, "lmplz"),
-            "--order",
-            str(args.arpa_order),
-            "--temp_prefix",
-            args.output_dir,
-            "--memory",
-            args.max_arpa_memory,
-            "--text",
-            data_lower,
-            "--arpa",
-            lm_path,
-            "--prune",
-            *args.arpa_prune.split("|"),
-        ]
+        os.path.join(args.kenlm_bin, "lmplz"),
+        "--order",
+        str(args.order),
+        "--temp_prefix",
+        args.output_dir,
+        "--memory",
+        args.max_memory,
+        "--text",
+        data_lower,
+        "--arpa",
+        lm_path,
+        "--prune",
+        *args.prune.split("|"),
+    ]
     subprocess.check_call(subargs)
 
     # Filter LM using vocabulary of top-k words
@@ -82,7 +93,7 @@ def build_lm(args, data_lower, vocab_str):
     filtered_path = os.path.join(args.output_dir, "lm_filtered.arpa")
     subprocess.run(
         [
-            os.path.join(args.kenlm_bins, "filter"),
+            os.path.join(args.kenlm_bin, "filter"),
             "single",
             "model:{}".format(lm_path),
             filtered_path,
@@ -93,6 +104,7 @@ def build_lm(args, data_lower, vocab_str):
 
 
 def main():
+    # fmt: off
     parser = argparse.ArgumentParser(
         description="Generate lm.binary and top-k vocab for DeepSpeech."
     )
@@ -117,35 +129,46 @@ def main():
         required=True,
     )
     parser.add_argument(
-        "--kenlm_bins",
+        "--kenlm_bin",
         help="File path to the KENLM binaries lmplz, filter and build_binary",
         type=str,
         required=True,
     )
     parser.add_argument(
-        "--arpa_order",
+        "--order",
         help="Order of k-grams in ARPA-file generation",
         type=int,
         required=True,
     )
     parser.add_argument(
-        "--max_arpa_memory",
+        "--max_memory",
         help="Maximum allowed memory usage for ARPA-file generation",
         type=str,
         required=True,
     )
     parser.add_argument(
-        "--arpa_prune",
+        "--prune",
         help="ARPA pruning parameters. Separate values with '|'",
         type=str,
         required=True,
     )
+    # fmt: on
 
     args = parser.parse_args()
 
-    os.makedirs(args.output_dir,exist_ok=True)
-    data_lower, vocab_str = convert_and_filter_topk(args)
-    build_lm(args, data_lower, vocab_str)
+    os.makedirs(args.output_dir, exist_ok=True)
+    data_lower, vocab_str = convert_and_filter_topk(
+        args.input_txt, args.cache_dir, args.top_k
+    )
+    arpa_args = ArpaArgs(
+        args.kenlm_bin, args.output_dir, args.order, args.max_memory, args.prune
+    )
+    build_lm(
+        arpa_args,
+        data_lower,
+        vocab_str,
+    )
+
 
 if __name__ == "__main__":
     main()
