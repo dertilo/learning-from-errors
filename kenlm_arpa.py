@@ -70,6 +70,7 @@ class ArpaArgs(NamedTuple):
 
 def build_lm(args: ArpaArgs, data_lower, vocab_str):
     print("\nCreating ARPA file ...")
+    os.makedirs(args.output_dir,exist_ok=True)
     lm_path = os.path.join(args.output_dir, "lm.arpa")
     subargs = [
         os.path.join(args.kenlm_bin, "lmplz"),

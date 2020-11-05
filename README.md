@@ -1,55 +1,20 @@
 # LFC 
+**cryptic naming is on purpose**
 
 ## approaches
 #### 1. "finetune" KenLM 
-* nemo quartznet inference on librispeech wav-version and low quality mp3
-* train KenLM on [normalized data](http://www.openslr.org/resources/11/librispeech-lm-norm.txt.gz); I suppose thats how LM models at [openslr](http://www.openslr.org/11/) where created
-* train `enhanced KenLM` on "modified" train-corpus which constists of original `normalized data` and corrections of erroneous phrases from train-960
-* erroneous phrases found by inference on low quality train-960 and alignment method (stolen from kaldi)
-* evaluation: WER of ASR-system quartz+KenLM and quartz+enhanced-KenLM on: 
-    1. dev-other wav -> hopefully WER of enhanced KenLM gets not worse!
-    2. dev-other low quality -> hypothesis enhanced KenLM get lower WER then standard KenLM
-
+* based on CTC prefix beam search + ngram LM implemented by [NeMo](https://github.com/NVIDIA/NeMo) and [OpenSeq2Seq](https://github.com/NVIDIA/OpenSeq2Seq/tree/master/decoders)
 * assuming shallow fusion of probabilities of acoustic model and language model
     + tweaking the language model (+ train data) in a way that it compensates for bias in the acoustic models
 
+1. train KenLM on [__librispeech-lm-data__](http://www.openslr.org/resources/11/librispeech-lm-norm.txt.gz); I suppose thats how LM models at [openslr](http://www.openslr.org/11/) where created
+    -> receive __librispeech-KenLM__
+2. train `enhanced KenLM` on __enhanced train-corpus__ which consists of original __librispeech-lm-data__ and __correction ngrams__ of erroneous phrases from [TEDLIUMv2 trainset](https://www.openslr.org/19/)
+* __correction ngrams__:
+    1. inference of [NeMo QuartzNet](https://ngc.nvidia.com/catalog/models/nvidia:nemospeechmodels) + __librispeech-KenLM__ on [TEDLIUMv2 trainset](https://www.openslr.org/19/) 
+    2. [alignment method](alignment.py) (stolen from kaldi) to find erroneous ngrams
+* [evaluation via WER](learning_from_errors_kenlm.ipynb) 
 
-#### 2. use SOTA LM and finetune it
-* needs beam-search that can handle "external" LM as scorer
-* LM integration into ASR, shallow-fusion weights?
-    * espnet config for librispeech proposes: `lm_weight: 0.6 ctc_weight: 0.4` -> !?
- 
-#### 3. "finetune" the acoustic model (quartznet) 
-* fine-tune nemo quartznet
-    * on (speech,text) dataset containing corrections
-
-#### 4. finetune seq2seq model on correction pairs
-1. inference with pretrained BART + calcuate some metrics
-    * metrics [see](/https://github.com/NVIDIA/NeMo/tree/main/nemo/collections/asr/metrics) 
-* finetune BART?
-
-## setup
-1. install [nemo](https://github.com/NVIDIA/NeMo) 
-```shell script
-conda create -n lfc python=3.8 -y
-sudo apt-get update && apt-get install -qq bc tree sox ffmpeg libsndfile1 libsox-fmt-mp3
-
-# NeMo itself
-conda activate lfc #or source activate on colab
-git clone https://github.com/NVIDIA/NeMo -b main # when exactly did github rename master to main?!
-pip -q install torch==1.6.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html # caution! this depends on cuda version! (colab uses 10.1) default pytorch installation takes 10.2
-cd NeMo/ && pip -q install -r requirements/requirements.txt
-cd NeMo/ && pip -q install -e .[asr]
-
-# stuff I like:
-pip install wandb torchaudio
-pip install "util@git+https://git@github.com/dertilo/util.git#egg=util"
-```
-2. install [ctc_decoders](https://github.com/NVIDIA/NeMo/blob/main/scripts/install_ctc_decoders.sh)
-```shell script
-sudo apt-get install swig
-cd NeMo && scripts/install_ctc_decoders.sh
-```
 ## preparing data
 
 * [librispeech data](http://www.openslr.org/12/)
@@ -66,18 +31,17 @@ Wall time: 5h 31min 3s
 ```
 
 #### generate erroneous data
+* [TEDLIUM](http://www.openslr.org/19/)
+    * trainset has 90979 samples
+
 1. `nemo quartznet + kenlm` inference on librispeech
     * kenlm: 3 gram, minfreqs: [0,8,9]
+
 ```shell script
 python3 kenlm_arpa.py --input_txt $HOME/data/asr_data/ENGLISH/librispeech-lm-norm.txt.gz --output_dir ./kenlm_3_089   --top_k 200000 --kenlm_bins $HOME/code/CPP/kenlm/build/bin/   --arpa_order 3 --max_arpa_memory "20%" --arpa_prune "0|8|9"
 gzip -c kenlm_3_089/lm_filtered.arpa > ~/googledrive/data/asr_data/ENGLISH/kenlm_3_089.arpa.gz
 ```
-* inference
-```shell script
-132553it [1:01:35, 35.87it/s]
-CPU times: user 482 ms, sys: 81.4 ms, total: 563 ms
-Wall time: 1h 2min 37s
-```
+* error ngrams
 2. calculate [erroneous ngrams](erroneous_ngrams.py)
 
 
