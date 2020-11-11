@@ -17,8 +17,8 @@ if __name__ == "__main__":
     print(client)
 
     refs_hyps_dir = "/tmp/train_kenlm_3_089_mp3"
-    refs = data_io.read_lines(f"{refs_hyps_dir}/refs.txt.gz", limit=4_000)
-    hyps = data_io.read_lines(f"{refs_hyps_dir}/hyps.txt.gz", limit=4_000)
+    refs = data_io.read_lines(f"{refs_hyps_dir}/refs.txt.gz")
+    hyps = data_io.read_lines(f"{refs_hyps_dir}/hyps.txt.gz")
     refs_hyps = list((ref, hyp) for ref, hyp in zip(refs, hyps))
 
     tokenize = lambda s: s.split(" ")
@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     start = time()
     aligned_ngrams = (
-        db.from_sequence(refs_hyps, npartitions=4 * 3)
+        db.from_sequence(refs_hyps, npartitions=4 * 4)
         .map(
             lambda rh: calc_aligned_ngram_tuples(
                 tokenize(rh[0]), tokenize(rh[1]), order
