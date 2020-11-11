@@ -5,8 +5,7 @@ from typing import List, Tuple
 
 from util import data_io
 
-from alignment import smith_waterman_alignment, get_edit_type
-
+from alignment import smith_waterman_alignment, get_edit_type, calc_ngram_align_tuples
 
 import re
 
@@ -65,6 +64,23 @@ def corrected_ngrams(
 
 if __name__ == "__main__":
 
-    ngrams = corrected_ngrams("/tmp/train_kenlm_3_089_mp3")
-    data_io.write_lines("ngrams.txt.gz", ngrams)
-    data_io.write_lines("unique_ngrams.txt.gz", list(set(ngrams)))
+    refs_hyps_dir = "/tmp/train_kenlm_3_089_mp3"
+    # ngrams = corrected_ngrams(refs_hyps_dir)
+
+    refs = data_io.read_lines(f"{refs_hyps_dir}/refs.txt.gz")
+    hyps = data_io.read_lines(f"{refs_hyps_dir}/hyps.txt.gz")
+
+    tuples = (
+        (h, r)
+        for ref, hyp in tqdm(zip(refs, hyps))
+        for h, r in calc_ngram_align_tuples(tokenize(ref), tokenize(hyp), 3)
+    )
+    error_tuples = ((r, h) for h, r in tuples if h != r and len(r) == 3)
+
+    data_io.write_lines(
+        "error_3gram_tuples.tsv",
+        (f"{' '.join(r)}\t{' '.join(h)}" for h, r in error_tuples),
+    )
+
+    # data_io.write_lines("ngrams.txt.gz", ngrams)
+    # data_io.write_lines("unique_ngrams.txt.gz", list(set(ngrams)))

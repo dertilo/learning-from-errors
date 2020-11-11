@@ -230,7 +230,7 @@ class Alignment(NamedTuple):
     hypi_to: int
 
 
-def padded_alignments(ref_tok:List[str], hyp_tok:List[str]):
+def padded_alignments(ref_tok:List[str], hyp_tok:List[str],eps="|"):
     output, score = smith_waterman_alignment(
         ref_tok,
         hyp_tok,
@@ -255,7 +255,7 @@ def padded_alignments(ref_tok:List[str], hyp_tok:List[str]):
 
 
 def calc_ngram_align_tuples(
-    ref_tok: List[str], hyp_tok: List[str], order: int, verbose=False
+    ref_tok: List[str], hyp_tok: List[str], order: int
 ) -> Generator[Tuple[List[str], List[str]], None, None]:
     alignments = padded_alignments(ref_tok,hyp_tok)
 
