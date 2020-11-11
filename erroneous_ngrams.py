@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 from util import data_io
 
-from alignment import smith_waterman_alignment, get_edit_type, calc_ngram_align_tuples
+from alignment import smith_waterman_alignment, get_edit_type, calc_aligned_ngram_tuples
 
 import re
 
@@ -73,12 +73,12 @@ if __name__ == "__main__":
     tuples = (
         (h, r)
         for ref, hyp in tqdm(zip(refs, hyps))
-        for h, r in calc_ngram_align_tuples(tokenize(ref), tokenize(hyp), 3)
+        for h, r in calc_aligned_ngram_tuples(tokenize(ref), tokenize(hyp), 3)
     )
     error_tuples = ((r, h) for h, r in tuples if h != r and len(r) == 3)
 
     data_io.write_lines(
-        "error_3gram_tuples.tsv",
+        "erroneous_3grams.tsv",
         (f"{' '.join(r)}\t{' '.join(h)}" for h, r in error_tuples),
     )
 
