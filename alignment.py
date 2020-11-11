@@ -1,6 +1,7 @@
 from __future__ import print_function
 
-from collections import Counter
+from collections import Counter, namedtuple, defaultdict
+from typing import Generator, Tuple, List, Dict, NamedTuple
 
 from pprint import pprint
 
@@ -220,32 +221,81 @@ def align_and_calc_edit_types(ref_tok, hyp_tok):
     return ets
 
 
-if __name__ == "__main__":
-    from util import data_io
+class Alignment(NamedTuple):
+    ref: str
+    hyp: str
+    refi_from: int
+    hypi_from: int
+    refi_to: int
+    hypi_to: int
 
-    name = "/tmp/lm_0_7"
-    format = "mp3"
-    refs = data_io.read_lines("%s_%s/refs.txt" % (name, format))
-    hyps = data_io.read_lines("%s_%s/hyps.txt" % (name, format))
-    e_g = (
-        e
-        for r, h in tqdm(zip(refs, hyps))
-        for e in align_and_calc_edit_types(r.split(), h.split())
+
+def padded_alignments(ref_tok:List[str], hyp_tok:List[str]):
+    output, score = smith_waterman_alignment(
+        ref_tok,
+        hyp_tok,
+        similarity_score_function=lambda x, y: 2 if (x == y) else -1,
+        del_score=-1,
+        ins_score=-1,
+        eps_symbol=eps,
+        align_full_hyp=True,
     )
-    pprint(Counter(e_g))
-    # Counter({'cor': 4461679, 'sub': 100513, 'del': 19828, 'ins': 8277})
-# if __name__ == '__main__':
-#     hyp = "Thee cad i blac"
-#     ref = "The cat is black"
-#
-#     verbose = 3
-#     eps = '|'
-#
-#     output, score = smith_waterman_alignment(
-#         ref, hyp, similarity_score_function=lambda x, y: 2 if (x == y) else -1,
-#         del_score=-1, ins_score=-1, eps_symbol=eps, align_full_hyp=True)
-#     print("ref: "+"".join(x[0] for x in output))
-#     print("hyp: "+"".join(x[1] for x in output))
-#
-#     print(output)
-#     print([f"{r}->{h}: {get_edit_type(r, h, eps)}" for r,h,*_ in output])
+    alignments = [Alignment(*o) for o in output]
+    start = alignments[0].refi_from
+    padding_left = [
+        Alignment(ref_tok[i], eps, i, 0, None, None) for i in range(0, start)
+    ]
+    end = alignments[-1].refi_from
+    padding_right = [
+        Alignment(ref_tok[i], eps, i, len(hyp_tok), None, None)
+        for i in range(end + 1, len(ref_tok))
+    ]
+    alignments = padding_left + alignments + padding_right
+    return alignments
+
+
+def calc_ngram_align_tuples(
+    ref_tok: List[str], hyp_tok: List[str], order: int, verbose=False
+) -> Generator[Tuple[List[str], List[str]], None, None]:
+    alignments = padded_alignments(hyp_tok, ref_tok)
+
+    ri_to_alignment = defaultdict(list)
+    for a in alignments:
+        ri_to_alignment[a.refi_from].append(a)
+
+    assert all([len(v) > 0 for v in ri_to_alignment.values()])
+
+    for o in range(1, order + 1):
+        for k in range(len(ref_tok) - (o - 1)):
+            ngram = [al for i in range(k, k + o) for al in ri_to_alignment[i]]
+            ref_ngram = ref_tok[ngram[0].refi_from : (ngram[-1].refi_from + 1)]
+            hyp_ngram = hyp_tok[ngram[0].hypi_from : (ngram[-1].hypi_from + 1)]
+            yield (hyp_ngram, ref_ngram)
+
+
+if __name__ == "__main__":
+    hyp = "hee cad i blac"
+    ref = "I think The cat is black"
+
+    verbose = 3
+    eps = "|"
+
+    output, score = smith_waterman_alignment(
+        ref,
+        hyp,
+        similarity_score_function=lambda x, y: 2 if (x == y) else -1,
+        del_score=-1,
+        ins_score=-1,
+        eps_symbol=eps,
+        align_full_hyp=True,
+    )
+    print("ref: " + "".join(x[0] for x in output))
+    print("hyp: " + "".join(x[1] for x in output))
+
+    alignments = padded_alignments(ref, hyp)
+    print("ref: " + "".join(x.ref for x in alignments))
+    print("hyp: " + "".join(x.hyp for x in alignments))
+
+    # print([(h,r) for h,r in calc_ngram_align_tuples(list(ref),list(hyp),3) if h!=r and len(r)==3 ] )
+    # print(output)
+    # print([f"{r}->{h}: {get_edit_type(r, h, eps)}" for r, h, *_ in output])
