@@ -257,7 +257,7 @@ def padded_alignments(ref_tok:List[str], hyp_tok:List[str]):
 def calc_ngram_align_tuples(
     ref_tok: List[str], hyp_tok: List[str], order: int, verbose=False
 ) -> Generator[Tuple[List[str], List[str]], None, None]:
-    alignments = padded_alignments(hyp_tok, ref_tok)
+    alignments = padded_alignments(ref_tok,hyp_tok)
 
     ri_to_alignment = defaultdict(list)
     for a in alignments:
@@ -275,7 +275,7 @@ def calc_ngram_align_tuples(
 
 if __name__ == "__main__":
     hyp = "hee cad i blac"
-    ref = "I think The cat is black"
+    ref = "I think the cat is black"
 
     verbose = 3
     eps = "|"
@@ -292,10 +292,9 @@ if __name__ == "__main__":
     print("ref: " + "".join(x[0] for x in output))
     print("hyp: " + "".join(x[1] for x in output))
 
-    alignments = padded_alignments(ref, hyp)
+    alignments = padded_alignments(list(ref), list(hyp))
+    print("padded")
     print("ref: " + "".join(x.ref for x in alignments))
     print("hyp: " + "".join(x.hyp for x in alignments))
 
-    # print([(h,r) for h,r in calc_ngram_align_tuples(list(ref),list(hyp),3) if h!=r and len(r)==3 ] )
-    # print(output)
-    # print([f"{r}->{h}: {get_edit_type(r, h, eps)}" for r, h, *_ in output])
+    pprint([(h,r) for h,r in calc_ngram_align_tuples(list(ref),list(hyp),3) if h!=r and len(r)==3 ] )
