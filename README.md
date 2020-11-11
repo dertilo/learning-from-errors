@@ -32,6 +32,7 @@ hyp: |||||||||hee cad i| blac|
 ```shell script
 ["hundred fifty", {"hundred and fifty": 104, "one hundred and": 1, "a hundred and": 1}]
 ```
+* see [ngram_counts.jsonl](ngram_counts.jsonl) for first 1000 most frequently misunderstood ngrams  
 
 ## "fine-tune" KenLM
 1. train `enhanced KenLM` on __enhanced train-corpus__ = __librispeech-lm-data__ + __correction ngrams__ of erroneous phrases from [TEDLIUMv2 trainset](https://www.openslr.org/19/)
