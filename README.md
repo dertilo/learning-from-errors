@@ -3,13 +3,13 @@
 
 __overall idea__: by "finetuning" an ngram-based Language Model one should be able to counteract errors that are specific to the acoustic model
 
-## 1. "generating" errors
+## "generating" errors
 1. take pretrained NeMo __QuartzNet__ ([QuartzNet5x5LS-En](https://ngc.nvidia.com/catalog/models/nvidia:nemospeechmodels))
-2. train [KenLM](https://github.com/kpu/kenlm) on [__librispeech-lm-data__](http://www.openslr.org/resources/11/librispeech-lm-norm.txt.gz); I suppose thats how LM models at [openslr](http://www.openslr.org/11/) where created
+2. train [KenLM](https://github.com/kpu/kenlm) on [__librispeech-lm-data__](http://www.openslr.org/resources/11/librispeech-lm-norm.txt.gz); I suppose thats how LM models at [openslr](http://www.openslr.org/11/) where created  
     -> receive __librispeech-KenLM__
-3. use __QuartzNet__ + __librispeech-KenLM__ to predict on [TEDLIUMv2 trainset](https://www.openslr.org/19/)
+3. use __QuartzNet__ + __librispeech-KenLM__ to predict on [TEDLIUMv2 trainset](https://www.openslr.org/19/)  
     -> receive ~90k __correction tuples__ `(hypothesis,reference)`
-4. use [smith-waterman-algorithm](alignment.py) (stolen from kaldi) to align hypothesis (predicitons) and references
+4. use [smith-waterman-algorithm](alignment.py) (stolen from kaldi) to align hypothesis (predicitons) and references  
     -> looks like
 ```shell script
 hyp = "hee cad i blac"
@@ -33,7 +33,7 @@ hyp: |||||||||hee cad i| blac|
 ["hundred fifty", {"hundred and fifty": 104, "one hundred and": 1, "a hundred and": 1}]
 ```
 
-## 2. "fine-tune" KenLM
+## "fine-tune" KenLM
 1. train `enhanced KenLM` on __enhanced train-corpus__ = __librispeech-lm-data__ + __correction ngrams__ of erroneous phrases from [TEDLIUMv2 trainset](https://www.openslr.org/19/)
     -> should give `hundred fifty` slightly higher probability
 2. Got WER of 0.289 vs. 0.284 ([see](learning_from_errors_kenlm.ipynb)) -> makes not really a difference!
